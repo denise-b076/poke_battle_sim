@@ -4,14 +4,10 @@ import battle.Type;
 
 import java.util.Arrays;
 
-public class ElectricCalculator {
-  private static final Type[] superEffectiveTypes = {Type.WATER, Type.FLYING};
-  private static final Type[] notVeryEffectiveTypes = {Type.GRASS, Type.ELECTRIC, Type.DRAGON};
-  private static final Type[] immunities = {Type.GROUND};
-
-  public ElectricCalculator() {
-
-  }
+public class GhostCalculator {
+  private static final Type[] superEffectiveTypes = {Type.PSYCHIC, Type.GHOST};
+  private static final Type[] notVeryEffectiveTypes = {Type.DARK};
+  private static final Type[] immunities = {Type.NORMAL};
 
   public static double calculate(Type defenseType) {
     if (Arrays.asList(superEffectiveTypes).contains(defenseType)) {
