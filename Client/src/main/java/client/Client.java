@@ -4,7 +4,6 @@ import battle.*;
 import battle.calculators.DamageCalculator;
 import database.DataAccessException;
 import database.GameDAO;
-import database.memory.MemoryGameDAO;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,20 +13,19 @@ import java.util.Scanner;
 public class Client {
 
   private final String exitString = "Gotta catch 'em all!";
+  private int movesAdded = 0;
   private boolean inBattle = false;
   private boolean mightResign = false;
-  private Pokemon userPokemon = null;
-  private Pokemon opponentPokemon = null;
-  private GameDAO gameDAO;
-  private Pokemon inProgressMon = null;
   private boolean addingTypes = false;
   private boolean addingMoves = false;
-  private int movesAdded = 0;
+  private Pokemon userPokemon = null;
+  private Pokemon opponentPokemon = null;
+  private Pokemon inProgressMon = null;
+  private GameDAO gameDAO;
 
-
-  public Client() {
+  public Client(GameDAO gameDAO) {
     try {
-      this.gameDAO=new MemoryGameDAO();
+      this.gameDAO = gameDAO;
       initializeDAO(gameDAO);
     }
     catch (DataAccessException e) {
@@ -113,11 +111,6 @@ public class Client {
     }
   }
 
-  private String mightResign() {
-    mightResign = true;
-    return "Are you sure you want to resign? (Y for yes, N for no)\n";
-  }
-
   private String cancelResign() {
     mightResign = false;
     return "";
@@ -131,178 +124,9 @@ public class Client {
     return "You gave up... better luck next time!\n";
   }
 
-  private String cancelCreate() {
-    addingTypes = false;
-    addingMoves = false;
-    movesAdded = 0;
-    inProgressMon = null;
-    return "Cancelled Pokemon creation";
-  }
-
-  private String addMove(String... params) throws Exception{
-    if (params.length == 3) {
-      try {
-        String name = params[0];
-        Type type=getType(params[1]);
-        if (type == null) {
-          throw new Exception("Error: Invalid Type");
-        }
-        int damage = Integer.parseInt(params[2]);
-        Move addMove = new Move(damage, type, name);
-        inProgressMon.setMove(movesAdded, addMove);
-        movesAdded += 1;
-        if (movesAdded > 2) {
-          addingMoves = false;
-          movesAdded = 0;
-          gameDAO.createPokemon(inProgressMon.getName(), inProgressMon.getLevel(), inProgressMon.getMoves(), inProgressMon.getTypes(), inProgressMon.getAttackStat(), inProgressMon.getDefenseStat(), inProgressMon.getHp());
-          String pokemonName = inProgressMon.getName();
-          inProgressMon = null;
-          return String.format("Created " + pokemonName + "!\n");
-        }
-        return String.format("Move " + (movesAdded + 1) + ": ");
-      }
-      catch (Exception e) {
-        throw new Exception("Expected: <NAME> <TYPE> <DAMAGE>");
-      }
-    }
-    throw new Exception("Expected: <NAME> <TYPE> <DAMAGE>");
-  }
-
-  private static Type getType(String typeString) {
-    Type type = null;
-    switch (typeString) {
-      case "fairy" -> type = Type.FAIRY;
-      case "dark"-> type = Type.DARK;
-      case "water" -> type = Type.WATER;
-      case "grass" -> type = Type.GRASS;
-      case "fire" -> type = Type.FIRE;
-      case "electric" -> type = Type.ELECTRIC;
-      case "poison" -> type = Type.POISON;
-      case "normal" -> type = Type.NORMAL;
-      case "dragon" -> type = Type.DRAGON;
-      case "ghost" -> type = Type.GHOST;
-      case "rock" -> type = Type.ROCK;
-      case "fighting" -> type = Type.FIGHTING;
-      case "flying" -> type = Type.FLYING;
-      case "steel" -> type = Type.STEEL;
-      case "ground" -> type = Type.GROUND;
-      case "psychic" -> type = Type.PSYCHIC;
-      case "bug" -> type = Type.BUG;
-      case "ice" -> type = Type.ICE;
-    }
-    return type;
-  }
-
-  private String addTypes(String... params) throws Exception{
-    if (params.length > 0 && params.length < 3) {
-      try {
-        for (int i = 0; i < params.length; i++) {
-          Type type = getType(params[i]);
-          if (type == null) {
-            throw new Exception("Error: Invalid Type");
-          }
-          inProgressMon.setType(i, type);
-          addingTypes = false;
-          addingMoves = true;
-        }
-        return "Move 1: \n";
-      }
-      catch (Exception e) {
-        throw new Exception("Expected: <TYPE> <TYPE>");
-      }
-    }
-    throw new Exception("Expected: <TYPE> <TYPE");
-  }
-
-  private String createPokemon(String... params) throws Exception {
-    if (params.length == 5) {
-      try {
-        String name = params[0];
-        int level = Integer.parseInt(params[1]);
-        int attackStat = Integer.parseInt(params[2]);
-        int defenseStat = Integer.parseInt(params[3]);
-        int hp = Integer.parseInt(params[4]);
-        inProgressMon = new Pokemon(name, level, new Move[]{null, null, null}, new Type[]{null, null}, attackStat, defenseStat, hp, 0);
-        addingTypes = true;
-        return "Please give the Pokemon's type(s): \n";
-      }
-      catch (Exception e) {
-        throw new Exception("Expected: <NAME> <LEVEL> <ATTACK> <DEFENSE> <HP>");
-      }
-    }
-    throw new Exception("Expected: <ID> <ID>");
-  }
-
-  private String potentialDamage(String... params) throws Exception {
-    if (params.length == 2) {
-      try {
-        Pokemon attackingPokemon;
-        Pokemon defendingPokemon;
-        if (params[0].equals("me")) {
-          defendingPokemon = userPokemon;
-          attackingPokemon = opponentPokemon;
-        }
-        else if (params[0].equals("them")) {
-          defendingPokemon = opponentPokemon;
-          attackingPokemon = userPokemon;
-        }
-        else {
-          throw new Exception("Invalid pokemon trainer");
-        }
-        int moveID = Integer.parseInt(params[1]);
-        boolean validMove = moveChecker(moveID);
-        if (!validMove) {
-          throw new Exception("Invalid move");
-        }
-        Move attack = attackingPokemon.getMoves()[moveID];
-        int[] potentialDamage = DamageCalculator.potentialCalculation(attack, attackingPokemon, defendingPokemon);
-        String possessiveWord = defendingPokemon == userPokemon ? "your" : "their";
-        String potentialReport = String.format("If " + possessiveWord + " " + defendingPokemon.getName() + " is attacked by " + attack.getName() + ":\n");
-        potentialReport += String.format("Damage range with crit: " + potentialDamage[2] + "-" + potentialDamage[3] + "\n")
-                + String.format("Damage range without crit: " + potentialDamage[0] + "-" + potentialDamage[1] + "\n");
-        return potentialReport;
-      }
-      catch (Exception e) {
-        throw new Exception("Expected: <ME | THEM> <MOVE ID>");
-      }
-    }
-    throw new Exception("Expected: <ME | THEM> <MOVE ID>");
-  }
-
   private String checkBattleState() {
     return String.format("Your " + userPokemon.getName() + "'s HP: " + userPokemon.getHp() + "\n") +
             String.format("Their " + opponentPokemon.getName() + "'s HP: " + opponentPokemon.getHp() + "\n");
-  }
-
-  private String pokemonInfo() throws DataAccessException {
-    try {
-      ArrayList<Pokemon> pokemonInfo=gameDAO.listPokemon();
-      StringBuilder pokemonInfoString = new StringBuilder();
-      for (Pokemon pokemon : pokemonInfo) {
-        pokemonInfoString.append(pokemon);
-      }
-      return pokemonInfoString.toString();
-    }
-    catch (DataAccessException e) {
-      throw new DataAccessException(e.getMessage());
-    }
-  }
-
-  private String startBattle(String... params) throws Exception {
-    if (params.length == 2) {
-      try {
-        int userPokemonID = Integer.parseInt(params[0]);
-        userPokemon = new Pokemon(gameDAO.getPokemon(userPokemonID));
-        int opponentPokemonID = Integer.parseInt(params[1]);
-        opponentPokemon =  new Pokemon(gameDAO.getPokemon(opponentPokemonID));
-        inBattle = true;
-        return String.format("Battle Start! " + userPokemon.getName() + " is challenged by " + opponentPokemon.getName() + "\n");
-      }
-      catch (Exception e) {
-        throw new Exception("Expected: <ID> <ID>");
-      }
-    }
-    throw new Exception("Expected: <ID> <ID>");
   }
 
   private String attack(String... params) throws Exception{
@@ -348,16 +172,6 @@ public class Client {
     throw new Exception("Expected: <MOVE ID>");
   }
 
-  private boolean moveChecker(int moveID) {
-    return moveID < 3 & moveID > -1;
-  }
-
-  private Move opponentMoveSelector(Pokemon opponentPokemon) {
-    Random r = new Random();
-    int moveSelector = r.nextInt(3);
-    return opponentPokemon.getMoves()[moveSelector];
-  }
-
   private String handleAttackResult(AttackResult result, Pokemon hitPokemon) {
     StringBuilder consequences = new StringBuilder();
     if (result.superEffective()) {
@@ -382,6 +196,17 @@ public class Client {
     return consequences.toString();
   }
 
+  private Move opponentMoveSelector(Pokemon opponentPokemon) {
+    Random r = new Random();
+    int moveSelector = r.nextInt(3);
+    return opponentPokemon.getMoves()[moveSelector];
+  }
+
+  private String mightResign() {
+    mightResign = true;
+    return "Are you sure you want to resign? (Y for yes, N for no)\n";
+  }
+
   private String seeMoves(String... params) throws Exception {
     if (params.length == 1) {
       Pokemon reference;
@@ -402,6 +227,154 @@ public class Client {
       }
     }
     throw new Exception("Expected: <ME | THEM");
+  }
+
+  private String potentialDamage(String... params) throws Exception {
+    if (params.length == 2) {
+      try {
+        Pokemon attackingPokemon;
+        Pokemon defendingPokemon;
+        if (params[0].equals("me")) {
+          defendingPokemon = userPokemon;
+          attackingPokemon = opponentPokemon;
+        }
+        else if (params[0].equals("them")) {
+          defendingPokemon = opponentPokemon;
+          attackingPokemon = userPokemon;
+        }
+        else {
+          throw new Exception("Invalid pokemon trainer");
+        }
+        int moveID = Integer.parseInt(params[1]);
+        boolean validMove = moveChecker(moveID);
+        if (!validMove) {
+          throw new Exception("Invalid move");
+        }
+        Move attack = attackingPokemon.getMoves()[moveID];
+        int[] potentialDamage = DamageCalculator.potentialCalculation(attack, attackingPokemon, defendingPokemon);
+        String possessiveWord = defendingPokemon == userPokemon ? "your" : "their";
+        String potentialReport = String.format("If " + possessiveWord + " " + defendingPokemon.getName() + " is attacked by " + attack.getName() + ":\n");
+        potentialReport += String.format("Damage range with crit: " + potentialDamage[2] + "-" + potentialDamage[3] + "\n")
+                + String.format("Damage range without crit: " + potentialDamage[0] + "-" + potentialDamage[1] + "\n");
+        return potentialReport;
+      }
+      catch (Exception e) {
+        throw new Exception("Expected: <ME | THEM> <MOVE ID>");
+      }
+    }
+    throw new Exception("Expected: <ME | THEM> <MOVE ID>");
+  }
+
+  private boolean moveChecker(int moveID) {
+    return moveID < 3 & moveID > -1;
+  }
+
+  private String addTypes(String... params) throws Exception{
+    if (params.length > 0 && params.length < 3) {
+      try {
+        for (int i = 0; i < params.length; i++) {
+          Type type = TypeConverter.getTypeFromString(params[i]);
+          if (type == null) {
+            throw new Exception("Error: Invalid Type");
+          }
+          inProgressMon.setType(i, type);
+          addingTypes = false;
+          addingMoves = true;
+        }
+        return "Move 1: \n";
+      }
+      catch (Exception e) {
+        throw new Exception("Expected: <TYPE> || <TYPE> <TYPE>");
+      }
+    }
+    throw new Exception("Expected: <TYPE> || <TYPE> <TYPE");
+  }
+
+  private String addMove(String... params) throws Exception{
+    if (params.length == 3) {
+      try {
+        String name = params[0];
+        Type type = TypeConverter.getTypeFromString(params[1]);
+        if (type == null) {
+          throw new Exception("Error: Invalid Type");
+        }
+        int damage = Integer.parseInt(params[2]);
+        Move addMove = new Move(damage, type, name);
+        inProgressMon.setMove(movesAdded, addMove);
+        movesAdded += 1;
+        if (movesAdded > 2) {
+          addingMoves = false;
+          movesAdded = 0;
+          gameDAO.createPokemon(inProgressMon.getName(), inProgressMon.getLevel(), inProgressMon.getMoves(), inProgressMon.getTypes(), inProgressMon.getAttackStat(), inProgressMon.getDefenseStat(), inProgressMon.getHp());
+          String pokemonName = inProgressMon.getName();
+          inProgressMon = null;
+          return String.format("Created " + pokemonName + "!\n");
+        }
+        return String.format("Move " + (movesAdded + 1) + ": ");
+      }
+      catch (Exception e) {
+        throw new Exception("Expected: <NAME> <TYPE> <DAMAGE>");
+      }
+    }
+    throw new Exception("Expected: <NAME> <TYPE> <DAMAGE>");
+  }
+
+  private String cancelCreate() {
+    addingTypes = false;
+    addingMoves = false;
+    movesAdded = 0;
+    inProgressMon = null;
+    return "Cancelled Pokemon creation";
+  }
+
+  private String pokemonInfo() throws DataAccessException {
+    try {
+      ArrayList<Pokemon> pokemonInfo=gameDAO.listPokemon();
+      StringBuilder pokemonInfoString = new StringBuilder();
+      for (Pokemon pokemon : pokemonInfo) {
+        pokemonInfoString.append(pokemon);
+      }
+      return pokemonInfoString.toString();
+    }
+    catch (DataAccessException e) {
+      throw new DataAccessException(e.getMessage());
+    }
+  }
+
+  private String startBattle(String... params) throws Exception {
+    if (params.length == 2) {
+      try {
+        int userPokemonID = Integer.parseInt(params[0]);
+        userPokemon = new Pokemon(gameDAO.getPokemon(userPokemonID));
+        int opponentPokemonID = Integer.parseInt(params[1]);
+        opponentPokemon =  new Pokemon(gameDAO.getPokemon(opponentPokemonID));
+        inBattle = true;
+        return String.format("Battle Start! " + userPokemon.getName() + " is challenged by " + opponentPokemon.getName() + "\n");
+      }
+      catch (Exception e) {
+        throw new Exception("Expected: <ID> <ID>");
+      }
+    }
+    throw new Exception("Expected: <ID> <ID>");
+  }
+
+  private String createPokemon(String... params) throws Exception {
+    if (params.length == 5) {
+      try {
+        String name = params[0];
+        int level = Integer.parseInt(params[1]);
+        int attackStat = Integer.parseInt(params[2]);
+        int defenseStat = Integer.parseInt(params[3]);
+        int hp = Integer.parseInt(params[4]);
+        inProgressMon = new Pokemon(name, level, new Move[]{null, null, null}, new Type[]{null, null}, attackStat, defenseStat, hp, 0);
+        addingTypes = true;
+        return "Please give the Pokemon's type(s): \n";
+      }
+      catch (Exception e) {
+        throw new Exception("Expected: <NAME> <LEVEL> <ATTACK> <DEFENSE> <HP>");
+      }
+    }
+    throw new Exception("Expected: <NAME> <LEVEL> <ATTACK> <DEFENSE> <HP>");
   }
 
   private String help() {
